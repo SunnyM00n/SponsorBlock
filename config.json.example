@@ -33,14 +33,14 @@
     },
     "extensionImportList": {
         "chromium": [
-            "placeholder"
+            "enamippconapkdmgfgjchkhakpfinmaj"
         ],
         "firefox": [
-            "deArrow@floger.app",
-            "deArrowBETA@floger.app"
+            "deArrow@ajay.app",
+            "deArrowBETA@ajay.app"
         ],
         "safari": [
-            "app.floger.dearrow.extension"
+            "app.ajay.dearrow.extension"
         ]
     }
 }
