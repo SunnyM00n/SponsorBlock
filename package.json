@@ -4,9 +4,14 @@
   "description": "",
   "main": "background.js",
   "dependencies": {
+    "@types/webpack": "^5.28.5",
+    "chai": "^5.2.0",
     "content-scripts-register-polyfill": "^4.0.2",
+    "mocha": "^11.1.0",
+    "nyc": "^17.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "trash": "^9.0.0"
   },
   "overrides": {
     "content-scripts-register-polyfill": {
@@ -26,11 +31,12 @@
     "chromedriver": "^110.0.0",
     "concurrently": "^7.6.0",
     "copy-webpack-plugin": "^11.0.0",
-    "eslint": "^8.35.0",
+    "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.32.2",
     "fork-ts-checker-webpack-plugin": "^7.3.0",
     "jest": "^29.5.0",
     "jest-environment-jsdom": "^29.5.0",
+    "remove-files-webpack-plugin": "^1.5.0",
     "rimraf": "^4.3.1",
     "schema-utils": "^4.0.0",
     "selenium-webdriver": "^4.8.1",
@@ -41,8 +47,7 @@
     "web-ext": "^8.2.0",
     "webpack": "^5.94.0",
     "webpack-cli": "^4.10.0",
-    "webpack-merge": "^5.8.0",
-    "remove-files-webpack-plugin": "^1.5.0"
+    "webpack-merge": "^5.8.0"
   },
   "scripts": {
     "web-run": "npm run web-run:chrome",

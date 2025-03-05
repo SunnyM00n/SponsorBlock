@@ -7,7 +7,6 @@ const BuildManifest = require('./webpack.manifest');
 const srcDir = '../src/';
 const fs = require("fs");
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
-const configDiffPlugin = require('./configDiffPlugin');
 
 const edgeLanguages = [
     "de",
@@ -25,8 +24,6 @@ const edgeLanguages = [
     "zh_CN"
 ]
 
-
-
 module.exports = env => {
     const documentScriptBuild = webpack({
         entry: {
@@ -37,18 +34,18 @@ module.exports = env => {
         },
         module: {
             rules: [
-                {
-                    test: /\.tsx?$/,
-                    loader: 'ts-loader',
-                    exclude: /node_modules/,
-                    resourceQuery: { not: [/raw/] },
-                    options: {
-                        // disable type checker for user in fork plugin
-                        transpileOnly: true,
-                        configFile: env.mode === "production" ? "tsconfig-production.json" : "tsconfig.json"
-                    }
-                },
-            ]
+                    {
+                        test: /\.tsx?$/,
+                        loader: 'ts-loader',
+                        exclude: /node_modules/,
+                        resourceQuery: { not: [/raw/] },
+                        options: {
+                            // disable type checker for user in fork plugin
+                            transpileOnly: true,
+                            configFile: env.mode === "production" ? "tsconfig-production.json" : "tsconfig.json"
+                        }
+                    },
+                    ]
         },
         resolve: {
             extensions: ['.ts', '.tsx', '.js']
@@ -191,7 +188,6 @@ module.exports = env => {
                 pretty: env.mode === "production",
                 stream: env.stream
             }),
-            new configDiffPlugin()
         ],
         performance: {
             hints: false,
@@ -201,3 +197,5 @@ module.exports = env => {
 
     };
 };
+
+
