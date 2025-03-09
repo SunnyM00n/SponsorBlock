@@ -35,7 +35,7 @@ import { ChapterVote } from "./render/ChapterVote";
 import { openWarningDialog } from "./utils/warnings";
 import { isFirefoxOrSafari, waitFor } from "../maze-utils/src";
 import { getErrorMessage, getFormattedTime } from "../maze-utils/src/formating";
-import { getChannelIDInfo, getVideo, getIsAdPlaying, getIsLivePremiere, setIsAdPlaying, checkVideoIDChange, getVideoID, getYouTubeVideoID, setupVideoModule, checkIfNewVideoID, isOnInvidious, isOnMobileYouTube, getLastNonInlineVideoID, triggerVideoIDChange, triggerVideoElementChange, getIsInline, getCurrentTime, setCurrentTime, getVideoDuration, verifyCurrentTime, waitForVideo } from "../maze-utils/src/video";
+import { getChannelIDInfo, getVideo, getIsAdPlaying, getIsLivePremiere, setIsAdPlaying, checkVideoIDChange, getVideoID, getYouTubeVideoID, setupVideoModule, checkIfNewVideoID, isOnInvidious, isOnMobileYouTube, isOnYTTV, getLastNonInlineVideoID, triggerVideoIDChange, triggerVideoElementChange, getIsInline, getCurrentTime, setCurrentTime, getVideoDuration, verifyCurrentTime, waitForVideo } from "../maze-utils/src/video";
 import { Keybind, StorageChangesObject, isSafari, keybindEquals, keybindToString } from "../maze-utils/src/config";
 import { findValidElement } from "../maze-utils/src/dom"
 import { getHash, HashedValue } from "../maze-utils/src/hash";
@@ -240,7 +240,8 @@ function messageListener(request: Message, sender: unknown, sendResponse: (respo
             break;
         case "getChannelID":
             sendResponse({
-                channelID: getChannelIDInfo().id
+                channelID: getChannelIDInfo().id,
+                isYTTV: (document.location.host === "tv.youtube.com")
             });
 
             break;
@@ -553,6 +554,10 @@ function getPreviewBarAttachElement(): HTMLElement | null {
         }, {
             // For Vorapis v3
             selector: ".ytp-progress-bar-container > .html5-progress-bar > .ytp-progress-list"
+        }, {
+            // For YTTV
+            selector: ".yssi-slider > div.ytu-ss-timeline-container",
+            isVisibleCheck: false
         }
     ];
 
@@ -578,7 +583,7 @@ function createPreviewBar(): void {
 
     if (el) {
         const chapterVote = new ChapterVote(voteAsync);
-        previewBar = new PreviewBar(el, isOnMobileYouTube(), isOnInvidious(), chapterVote, () => importExistingChapters(true));
+        previewBar = new PreviewBar(el, isOnMobileYouTube(), isOnInvidious(), isOnYTTV(), chapterVote, () => importExistingChapters(true));
 
         updatePreviewBar();
     }
@@ -767,7 +772,7 @@ async function startSponsorSchedule(includeIntersectingSegments = false, current
 
             // Use interval instead of timeout near the end to combat imprecise video time
             const startIntervalTime = forceStartIntervalTime || performance.now();
-            const startVideoTime = Math.max(currentTime, getCurrentTime());
+            const startVideoTime = Math.max(currentTime, getVirtualTime());
             delayTime = (skipTime?.[0] - startVideoTime) * 1000 * (1 / getVideo().playbackRate);
 
             let startWaitingForReportedTimeToChange = true;
@@ -786,7 +791,7 @@ async function startSponsorSchedule(includeIntersectingSegments = false, current
                 }
 
                 const intervalDuration = performance.now() - startIntervalTime;
-                if (intervalDuration + skipBuffer * 1000 >= delayTime || getCurrentTime() >= skipTime[0]) {
+                if (intervalDuration + skipBuffer * 1000 >= delayTime || getVirtualTime() + skipBuffer >= skipTime[0]) {
                     clearInterval(currentSkipInterval);
                     if (!isFirefoxOrSafari() && !getVideo().muted && !inMuteSegment(getCurrentTime(), true)) {
                         // Workaround for more accurate skipping on Chromium
@@ -794,7 +799,7 @@ async function startSponsorSchedule(includeIntersectingSegments = false, current
                         getVideo().muted = false;
                     }
 
-                    skippingFunction(Math.max(getCurrentTime(), startVideoTime + getVideo().playbackRate * Math.max(delayTime, intervalDuration) / 1000));
+                    skippingFunction(Math.max(getVirtualTime(), startVideoTime + getVideo().playbackRate * Math.max(delayTime, intervalDuration) / 1000));
                 }
             }, 0);
         } else {
@@ -837,7 +842,7 @@ function getVirtualTime(): number {
         (performance.now() - lastKnownVideoTime.preciseTime) * (getVideo()?.playbackRate || 1) / 1000 + lastKnownVideoTime.videoTime : null);
 
     if (Config.config.useVirtualTime && !isSafari() && virtualTime
-            && Math.abs(virtualTime - getCurrentTime()) < 0.2 && getCurrentTime() !== 0) {
+            && virtualTime > getCurrentTime() && virtualTime - getCurrentTime() < 0.8 && getCurrentTime() !== 0) {
         return Math.max(virtualTime, getCurrentTime());
     } else {
         return getCurrentTime();
@@ -1147,7 +1152,8 @@ function setupSkipButtonControlBar() {
                 forceAutoSkip: true
             }),
             selectSegment,
-            onMobileYouTube: isOnMobileYouTube()
+            onMobileYouTube: isOnMobileYouTube(),
+            onYTTV: isOnYTTV(),
         });
     }
 
@@ -1408,15 +1414,17 @@ function updatePreviewBar(): void {
     }
 
     sponsorTimesSubmitting.forEach((segment) => {
-        previewBarSegments.push({
-            segment: segment.segment as [number, number],
-            category: segment.category,
-            actionType: segment.actionType,
-            unsubmitted: true,
-            showLarger: segment.actionType === ActionType.Poi,
-            description: segment.description,
-            source: segment.source
-        });
+        if (segment.actionType !== ActionType.Chapter || segment.segment.length > 1) {
+            previewBarSegments.push({
+                segment: segment.segment as [number, number],
+                category: segment.category,
+                actionType: segment.actionType,
+                unsubmitted: true,
+                showLarger: segment.actionType === ActionType.Poi,
+                description: segment.description,
+                source: segment.source
+            });
+        }
     });
 
     previewBar.set(previewBarSegments.filter((segment) => segment.actionType !== ActionType.Full), getVideoDuration())
@@ -1779,7 +1787,7 @@ function skipToTime({v, skipTime, skippingSegments, openNotice, forceAutoSkip, u
     if (autoSkip || isSubmittingSegment) sendTelemetryAndCount(skippingSegments, skipTime[1] - skipTime[0], true);
 }
 
-function createSkipNotice(skippingSegments: SponsorTime[], autoSkip: boolean, unskipTime: number, startReskip: boolean) {
+function createSkipNotice(skippingSegments: SponsorTime[], autoSkip: boolean, unskipTime: number, startReskip: boolean, voteNotice = false) {
     for (const skipNotice of skipNotices) {
         if (skippingSegments.length === skipNotice.segments.length
                 && skippingSegments.every((segment) => skipNotice.segments.some((s) => s.UUID === segment.UUID))) {
@@ -1793,7 +1801,7 @@ function createSkipNotice(skippingSegments: SponsorTime[], autoSkip: boolean, un
     const newSkipNotice = new SkipNotice(skippingSegments, autoSkip, skipNoticeContentContainer, () => {
         upcomingNotice?.close();
         upcomingNotice = null;
-    }, unskipTime, startReskip, upcomingNoticeShown);
+    }, unskipTime, startReskip, upcomingNoticeShown, voteNotice);
     if (isOnMobileYouTube() || Config.config.skipKeybind == null) newSkipNotice.setShowKeybindHint(false);
     skipNotices.push(newSkipNotice);
 
@@ -1812,13 +1820,13 @@ function createUpcomingNotice(skippingSegments: SponsorTime[], timeLeft: number,
     upcomingNotice = new UpcomingNotice(skippingSegments, skipNoticeContentContainer, timeLeft / 1000, autoSkip);
 }
 
-function unskipSponsorTime(segment: SponsorTime, unskipTime: number = null, forceSeek = false) {
+function unskipSponsorTime(segment: SponsorTime, unskipTime: number = null, forceSeek = false, voteNotice = false) {
     if (segment.actionType === ActionType.Mute) {
         getVideo().muted = false;
         videoMuted = false;
     }
 
-    if (forceSeek || segment.actionType === ActionType.Skip) {
+    if (forceSeek || segment.actionType === ActionType.Skip || voteNotice) {
         //add a tiny bit of time to make sure it is not skipped again
         setCurrentTime(unskipTime ?? segment.segment[0] + 0.001);
     }
@@ -1850,6 +1858,10 @@ function createButton(baseID: string, title: string, callback: () => void, image
     newButton.id = baseID + "Button";
     newButton.classList.add("playerButton");
     newButton.classList.add("ytp-button");
+    if (isOnYTTV()) {
+        // Some style needs to be set here, but the numbers don't matter 
+        newButton.setAttribute("style", "width: 40px; height: 40px");
+    }
     newButton.setAttribute("title", chrome.i18n.getMessage(title));
     newButton.addEventListener("click", () => {
         callback();
@@ -1924,7 +1936,7 @@ async function updateVisibilityOfPlayerControlsButton(): Promise<void> {
     updateEditButtonsOnPlayer();
 
     // Don't show the info button on embeds
-    if (Config.config.hideInfoButtonPlayerControls || document.URL.includes("/embed/") || isOnInvidious()
+    if (Config.config.hideInfoButtonPlayerControls || document.URL.includes("/embed/") || isOnInvidious() || isOnYTTV()
         || document.getElementById("sponsorBlockPopupContainer") != null) {
         playerButtons.info.button.style.display = "none";
     } else {
@@ -1991,6 +2003,11 @@ function getRealCurrentTime(): number {
 }
 
 function startOrEndTimingNewSegment() {
+    if (isOnYTTV() && getIsLivePremiere()) {
+        alert(chrome.i18n.getMessage("yttvLiveContentWarning"));
+        return;
+    }
+
     verifyCurrentTime();
     const roundedTime = Math.round((getRealCurrentTime() + Number.EPSILON) * 1000) / 1000;
     if (!isSegmentCreationInProgress()) {
@@ -2486,6 +2503,8 @@ function getSegmentsMessage(sponsorTimes: SponsorTime[]): string {
 }
 
 function updateActiveSegment(currentTime: number): void {
+    if (!chrome.runtime?.id) return;
+
     previewBar?.updateChapterText(sponsorTimes, sponsorTimesSubmitting, currentTime);
 
     chrome.runtime.sendMessage({
@@ -2533,6 +2552,23 @@ function previousChapter(): void {
     }
 }
 
+async function handleKeybindVote(type: number): Promise<void>{
+    let lastSkipNotice = skipNotices[0]?.skipNoticeRef.current;
+    lastSkipNotice?.onMouseEnter();
+
+    if (!lastSkipNotice) {
+        const lastSegment = [...sponsorTimes].reverse()?.find((s) => s.source == SponsorSourceType.Server && (s.segment[0] <= getCurrentTime() && getCurrentTime() - (s.segment[1] || s.segment[0]) <= Config.config.skipNoticeDuration));
+        if (!lastSegment) return;
+
+        createSkipNotice([lastSegment], shouldAutoSkip(lastSegment), lastSegment?.segment[0] + 0.001,false, true);
+        lastSkipNotice = await skipNotices[0].waitForSkipNoticeRef();
+        lastSkipNotice?.reskippedMode(0);
+    }
+
+    vote(type,lastSkipNotice?.segments[0]?.UUID, undefined, lastSkipNotice);
+    return;
+}
+
 function addHotkeyListener(): void {
     document.addEventListener("keydown", hotkeyListener);
 
@@ -2576,6 +2612,8 @@ function hotkeyListener(e: KeyboardEvent): void {
     const openSubmissionMenuKey = Config.config.submitKeybind;
     const nextChapterKey = Config.config.nextChapterKeybind;
     const previousChapterKey = Config.config.previousChapterKeybind;
+    const upvoteKey = Config.config.upvoteKeybind;
+    const downvoteKey = Config.config.downvoteKeybind;
 
     if (keybindEquals(key, skipKey)) {
         if (activeSkipKeybindElement) {
@@ -2618,6 +2656,12 @@ function hotkeyListener(e: KeyboardEvent): void {
     } else if (keybindEquals(key, previousChapterKey)) {
         if (sponsorTimes.length > 0) e.stopPropagation();
         previousChapter();
+        return;
+    } else if (keybindEquals(key, upvoteKey)) {
+        handleKeybindVote(1);
+        return;
+    } else if (keybindEquals(key, downvoteKey)) {
+        handleKeybindVote(0);
         return;
     }
 }
@@ -2669,6 +2713,7 @@ function showTimeWithoutSkips(skippedDuration: number): void {
     // YouTube player time display
     const selector =
         isOnInvidious()     ? ".vjs-duration" :
+        isOnYTTV()          ? ".ypl-full-controls .ypmcs-control .time-info-bar" :
         isOnMobileYouTube() ? ".ytwPlayerTimeDisplayContent" :
                               ".ytp-time-display.notranslate .ytp-time-wrapper";
     const display = document.querySelector(selector);
