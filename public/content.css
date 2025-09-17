@@ -243,7 +243,7 @@ div:hover > .sponsorBlockChapterBar {
 }
 
 .sponsorSkipObject {
-	font-family: Roboto, Arial, Helvetica, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 
 	margin-left: var(--skip-notice-margin);
 	margin-right: var(--skip-notice-margin);
