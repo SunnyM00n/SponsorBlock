@@ -228,7 +228,7 @@ class SkipNoticeComponent extends React.Component<SkipNoticeProps, SkipNoticeSta
                         <div id={"sponsorTimesDownvoteButtonsContainerUpvote" + this.idSuffix}
                                 className="voteButton"
                                 style={{marginRight: "5px"}}
-                                title={chrome.i18n.getMessage("upvoteButtonInfo")}
+                                title={chrome.i18n.getMessage("upvoteButtonInfo") + " (" + keybindToString(Config.config.upvoteKeybind) + ")"}
                                 onClick={() => this.prepAction(SkipNoticeAction.Upvote)}>
                             <ThumbsUpSvg fill={(this.state.actionState === SkipNoticeAction.Upvote) ? this.selectedColor : this.unselectedColor} />
                         </div>
@@ -237,7 +237,7 @@ class SkipNoticeComponent extends React.Component<SkipNoticeProps, SkipNoticeSta
                         <div id={"sponsorTimesDownvoteButtonsContainerDownvote" + this.idSuffix}
                                 className="voteButton"
                                 style={{marginRight: "5px", marginLeft: "5px"}}
-                                title={chrome.i18n.getMessage("reportButtonInfo")}
+                                title={chrome.i18n.getMessage("reportButtonInfo") + " (" + keybindToString(Config.config.downvoteKeybind) + ")"}
                                 onClick={() => this.prepAction(SkipNoticeAction.Downvote)}>
                             <ThumbsDownSvg fill={downvoteButtonColor(this.segments, this.state.actionState, SkipNoticeAction.Downvote)} />
                         </div>
